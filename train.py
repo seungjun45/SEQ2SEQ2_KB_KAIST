@@ -5,14 +5,16 @@ import os
 import pdb
 
 from config import FLAGS
-from model2 import Seq2Seq
+from model import Seq2Seq
 from dialog import Dialog
 
 
 def train(dialog, batch_size=100, epoch=100):
-    model = Seq2Seq(dialog.vocab_size)
-
-    with tf.Session() as sess:
+    model = Seq2Seq(dialog.vocab_size,output_keep_prob=0.75)
+    config = tf.ConfigProto(
+        device_count={'GPU': 0}
+    )
+    with tf.Session(config=config) as sess:
         # TODO: 세션을 로드하고 로그를 위한 summary 저장등의 로직을 Seq2Seq 모델로 넣을 필요가 있음
         ckpt = tf.train.get_checkpoint_state(FLAGS.train_dir)
         if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):
@@ -27,12 +29,15 @@ def train(dialog, batch_size=100, epoch=100):
         total_batch = int(math.ceil(len(dialog.examples)/float(batch_size)))
 
         for step in range(total_batch * epoch):
-            enc_input, dec_input, targets = dialog.next_batch(batch_size)
+            enc_forward_input, enc_reverse_input, dec_input, targets = dialog.next_batch(batch_size)
             #pdb.set_trace()
-            _, loss = model.train(sess, enc_input, dec_input, targets)
+
+
+
+            _, loss = model.train(sess, enc_forward_input, enc_reverse_input, dec_input, targets)
 
             #if (step + 1) % 100 == 0:
-            model.write_logs(sess, writer, enc_input, dec_input, targets)
+            # model.write_logs(sess, writer, enc_input, dec_input, targets)
 
             print('Step:', '%06d' % model.global_step.eval(),
                   'cost =', '{:.6f}'.format(loss))
@@ -49,16 +54,16 @@ def train(dialog, batch_size=100, epoch=100):
 def test(dialog, batch_size=100):
     print("\n=== 예측 테스트 ===")
 
-    model = Seq2Seq(dialog.vocab_size)
+    model = Seq2Seq(dialog.vocab_size,output_keep_prob=1.)
 
     with tf.Session() as sess:
         ckpt = tf.train.get_checkpoint_state(FLAGS.train_dir)
         print("다음 파일에서 모델을 읽는 중 입니다..", ckpt.model_checkpoint_path)
         model.saver.restore(sess, ckpt.model_checkpoint_path)
 
-        enc_input, dec_input, targets = dialog.next_batch(batch_size)
+        enc_forward_input, enc_reverse_input, dec_input, targets = dialog.next_batch(batch_size)
 
-        expect, outputs, accuracy = model.test(sess, enc_input, dec_input, targets)
+        expect, outputs, accuracy = model.test(sess, enc_forward_input, enc_reverse_input, dec_input, targets)
 
         expect = dialog.decode(expect)
         outputs = dialog.decode(outputs)

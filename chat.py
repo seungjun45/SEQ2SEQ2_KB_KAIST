@@ -16,17 +16,22 @@ class ChatBot:
         self.dialog = Dialog()
         self.dialog.load_vocab(voc_path)
 
-        self.model = Seq2Seq(self.dialog.vocab_size)
-
-        self.sess = tf.Session()
+        self.model = Seq2Seq(self.dialog.vocab_size,output_keep_prob=0.9)
+        config = tf.ConfigProto(
+            device_count={'GPU': 0}
+        )
+        self.sess = tf.Session(config=config)
+        #self.sess = tf.Session()
         #pdb.set_trace()
         ckpt = tf.train.get_checkpoint_state(train_dir)
+        print (ckpt.model_checkpoint_path)
         self.model.saver.restore(self.sess, ckpt.model_checkpoint_path)
 
     def run(self):
         sys.stdout.write("> ")
         sys.stdout.flush()
         line = sys.stdin.readline()
+
 
         while line:
             print(self._get_replay(line.strip()))
@@ -40,13 +45,13 @@ class ChatBot:
         if type(dec_input) is np.ndarray:
             dec_input = dec_input.tolist()
 
-        input_len = int(math.ceil((len(enc_input) + 1) * 1.5))
+        input_len = 20 #int(math.ceil((len(enc_input) + 1) * 1.5))
 
-        enc_input, dec_input, _ = self.dialog.transform(enc_input, dec_input,
+        enc_forward_input, enc_reverse_input, dec_input, _ = self.dialog.transform(enc_input, dec_input,
                                                         input_len,
                                                         FLAGS.max_decode_len)
 
-        return self.model.predict(self.sess, [enc_input], [dec_input])
+        return self.model.predict(self.sess, [enc_forward_input],[enc_reverse_input],  [dec_input])
 
 
 ###########################################################################################
@@ -55,10 +60,15 @@ class ChatBot:
         enc_input = self.dialog.tokens_to_ids(enc_input)
         dec_input = []
 
+
         curr_seq = 0
         for i in range(FLAGS.max_decode_len):
-            print("Decoding 관련 내용을 넣어주세요")
-            dec_input
+            outputs = self._decode(enc_input,dec_input)
+            if self.dialog.is_eos(outputs[0][curr_seq]):
+                break
+            elif self.dialog.is_defined(outputs[0][curr_seq]) is not True:
+                dec_input.append(outputs[0][curr_seq])
+                curr_seq+=1
 
         reply = self.dialog.decode([dec_input], True)
 

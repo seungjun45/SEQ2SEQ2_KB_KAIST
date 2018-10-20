@@ -86,20 +86,23 @@ class Dialog():
             return seq
 
     def transform(self, input, output, input_max, output_max):
-        enc_input = self._pad(input, input_max)
+        enc_forward_input = self._pad_left(input, input_max)
+        enc_reverse_input = self._pad(input, input_max)
         dec_input = self._pad(output, output_max, start=True)
         target = self._pad(output, output_max, eos=True)
 
         # 구글 방식으로 입력을 인코더에 역순으로 입력한다.
-        enc_input.reverse()
+        #enc_input.reverse()
 
-        enc_input = np.eye(self.vocab_size)[enc_input]
+        enc_forward_input = np.eye(self.vocab_size)[enc_forward_input]
+        enc_reverse_input = np.eye(self.vocab_size)[enc_reverse_input]
         dec_input = np.eye(self.vocab_size)[dec_input]
 
-        return enc_input, dec_input, target
+        return enc_forward_input, enc_reverse_input, dec_input, target
 
     def next_batch(self, batch_size):
-        enc_input = []
+        enc_forward_input = []
+        enc_reverse_input = []
         dec_input = []
         target = []
 
@@ -121,15 +124,24 @@ class Dialog():
         # 간단하게 만들기 위해 구글처럼 버킷을 쓰지 않고 같은 배치는 같은 사이즈를 사용하도록 만듬
         max_len_input, max_len_output = self._max_len(batch_set)
 
+
         for i in range(0, len(batch_set) - 1, 2):
-            enc, dec, tar = self.transform(batch_set[i], batch_set[i+1],
+            # print ('----------------------------------')
+            # print ('입력 :')
+            # print (self.decode([batch_set[i]],True))
+            # print ('타겟 :')
+            # print (self.decode([batch_set[i+1]],True))
+            # print ('----------------------------------')
+
+            enc_f, enc_r, dec, tar = self.transform(batch_set[i], batch_set[i+1],
                                            max_len_input, max_len_output)
 
-            enc_input.append(enc)
+            enc_forward_input.append(enc_f)
+            enc_reverse_input.append(enc_r)
             dec_input.append(dec)
             target.append(tar)
 
-        return enc_input, dec_input, target
+        return enc_forward_input, enc_reverse_input, dec_input, target
 
     def tokens_to_ids(self, tokens):
         ids = []
@@ -175,7 +187,7 @@ class Dialog():
             words = self.tokenizer(content)
             #counter=collections.Counter(words)
             #words=counter.most_common(5000)
-            pdb.set_trace()
+            #pdb.set_trace()
             #words=[i[0] for i in words]
             words = list(set(words))
 
@@ -203,9 +215,9 @@ def main(_):
         dialog.load_vocab(FLAGS.voc_path)
         dialog.load_examples(FLAGS.data_path)
 
-        enc, dec, target = dialog.next_batch(10)
+        enc,enc_r, dec, target = dialog.next_batch(10)
         print(target)
-        enc, dec, target = dialog.next_batch(10)
+        enc, enc_r, dec, target = dialog.next_batch(10)
         print(target)
 
     elif FLAGS.data_path and FLAGS.voc_build:
